@@ -4,7 +4,7 @@ A web app for learning 499 Swedish verbs, with English and Persian meanings, exa
 Anyone can sign up with their **email + a one-time code**, and **each account has its own private progress**,
 saved online so it follows them between phone and computer. Everyone sees a notice when a **new version** is published.
 
-**Live app:** https://amirhoseinmoshari.github.io/swedish-verb-trainer/
+**Live app:** https://amirhoseinmoshari.github.io/swedishbyamir/
 
 - **Website hosting:** GitHub Pages (free)
 - **Sign-in codes + saved progress:** Supabase (free plan)
