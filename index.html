@@ -194,6 +194,9 @@ table.forms{width:100%;margin-top:18px;border-collapse:separate;border-spacing:0
 .authform .search{margin-top:0}
 .codein{font-size:1.6rem;letter-spacing:.3em;text-align:center;font-weight:700}
 .codein::placeholder{color:var(--line)}
+.seg{display:flex;gap:4px;background:var(--line);border-radius:14px;padding:4px;max-width:380px;margin:20px auto 0}
+.seg button{flex:1;border:0;border-radius:11px;background:transparent;min-height:44px;font-weight:700;color:var(--soft)}
+.seg button.on{background:var(--card);color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .autherr{color:var(--red);background:var(--red-soft);border-radius:12px;padding:10px 12px;max-width:380px;margin:16px auto 0;text-align:left}
 .authinfo{color:var(--ink);background:var(--blue-soft);border-radius:12px;padding:10px 12px;max-width:380px;margin:16px auto 0;text-align:left}
 .av{display:grid;place-items:center;font-weight:800;color:var(--blue);background:var(--blue-soft)}
@@ -293,9 +296,10 @@ function stats(){
 }
 
 /* ---------- Sign-in (email + code), approval, private storage and versions ---------- */
-const APP_VERSION = 6;
-const APP_LABEL = "2.0";
+const APP_VERSION = 7;
+const APP_LABEL = "2.1";
 const CHANGELOG = [
+  {v:7, notes:["New: sign in with email + password — no email needed.","Signed in with a link? Set a password on the Progress page to use it on other devices."]},
   {v:6, notes:["Sign in with your email and a one-time code.","Your progress is saved privately to your account and follows you between devices.","You’ll see a notice when a new version is ready."]},
   {v:4, notes:["Advanced English words added next to Elementary and Intermediate."]},
   {v:3, notes:["Similar English words are shown on the answer page."]},
@@ -401,11 +405,37 @@ async function verifyCode(code){
   ACCESS = "checking"; render();
   afterSignIn(data.session);
 }
+async function passwordAuth(email, password, isSignup){
+  AUTH.busy = true; AUTH.error = ""; AUTH.info = ""; render();
+  const res = isSignup ? await SB.auth.signUp({ email, password }) : await SB.auth.signInWithPassword({ email, password });
+  AUTH.busy = false;
+  const { data, error } = res;
+  if (error) {
+    const m = (error.message||"").toLowerCase();
+    AUTH.error = m.includes("invalid login") ? "Wrong email or password. If you signed up with an email link, use Email link and then set a password on the Progress page."
+      : m.includes("already registered") ? "This email already has an account. Sign in instead."
+      : m.includes("rate limit") ? "Too many attempts right now. Please wait a few minutes and try again."
+      : error.message;
+    return render();
+  }
+  if (data && data.session) { AUTH = {step:"email", email:"", error:"", info:"", busy:false, resendAt:0, mode:"password", pwStep:"signin"}; ACCESS="checking"; render(); return afterSignIn(data.session); }
+  // Sign-up without a session: either email confirmation is on, or the email already exists.
+  AUTH.pwStep = "signin";
+  AUTH.info = "If this email is new, your account is ready — sign in below. If it already had an account, sign in with its password, or use Email link.";
+  render();
+}
+let PWMSG = null;
+async function setPassword(pw){
+  PWMSG = {err:false, text:"Saving…"}; render();
+  const { error } = await SB.auth.updateUser({ password: pw });
+  PWMSG = error ? {err:true, text: error.message} : {err:false, text:"Password saved. You can now sign in with your email and this password on any device."};
+  render();
+}
 async function signOut(){
   await flush();
   try { await SB.auth.signOut(); } catch(e) {}
   clearTimeout(pollTimer);
-  UID=null; EMAIL=""; IS_OWNER=false; P=emptyProgress(); UI.study=null; UI.detail=null; UI.tab="home";
+  UID=null; EMAIL=""; IS_OWNER=false; P=emptyProgress(); UI.study=null; UI.detail=null; UI.tab="home"; PWMSG=null; history.replaceState(null,"",location.pathname+location.search);
   ACCESS="signin"; render();
 }
 
@@ -537,8 +567,23 @@ function gateView(){
       </form>
       <div class="chips" style="margin-top:12px"><button class="btn btn-ghost" data-resend${wait||AUTH.busy?" disabled":""}>${wait?"Send again in "+wait+"s":"Send the email again"}</button><button class="btn btn-ghost" data-changeemail>Change email</button></div></div>`;
   }
+  const seg = `<div class="seg" role="tablist"><button role="tab" aria-selected="${AUTH.mode!=="password"}" class="${AUTH.mode!=="password"?"on":""}" data-authmode="link">Email link</button><button role="tab" aria-selected="${AUTH.mode==="password"}" class="${AUTH.mode==="password"?"on":""}" data-authmode="password">Password</button></div>`;
+  if (AUTH.mode === "password") {
+    const signup = AUTH.pwStep === "signup";
+    return `<div class="gate"><div class="e">🇸🇪</div><h1>${signup?"Create your account":"Sign in"}</h1>
+    <p class="soft">${signup?"Choose a password (at least 6 characters). No email is needed.":"Sign in with your email and password."}</p>${seg}${msg}
+    <form id="pwform" class="authform" novalidate>
+      <label for="pwemail" class="soft small">Your email</label>
+      <input id="pwemail" class="search" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(AUTH.email)}" required>
+      <label for="pw" class="soft small">Password</label>
+      <input id="pw" class="search" type="password" autocomplete="${signup?"new-password":"current-password"}" minlength="6" placeholder="${signup?"At least 6 characters":"Your password"}" required>
+      <button class="btn btn-blue" type="submit"${AUTH.busy?" disabled":""}>${AUTH.busy?"One moment…":(signup?"Create account":"Sign in")}</button>
+    </form>
+    <p class="soft small" style="margin-top:14px">${signup?`Already have an account? <button class="linkbtn" data-pwstep="signin">Sign in</button>`:`New here? <button class="linkbtn" data-pwstep="signup">Create an account</button>`}</p>
+    ${signup?"":`<p class="soft small" style="max-width:380px;margin:4px auto 0">Forgot your password, or signed up with an email link before? Use <b>Email link</b> to sign in, then set a password on the Progress page.</p>`}</div>`;
+  }
   return `<div class="gate"><div class="e">🇸🇪</div><h1>Swedish Verb Trainer</h1>
-    <p class="soft">${VERBS.length} Swedish verbs with English and Persian meanings, examples and audio. Sign in with your email — we’ll email you a sign-in link. Your progress is saved to your own account.</p>${msg}
+    <p class="soft">${VERBS.length} Swedish verbs with English and Persian meanings, examples and audio. Sign in with an email link, or with email and password. Your progress is saved to your own account.</p>${seg}${msg}
     <form id="emailform" class="authform" novalidate>
       <label for="email" class="soft small">Your email</label>
       <input id="email" class="search" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(AUTH.email)}" required>
@@ -640,6 +685,18 @@ function progressView(){
     ${UI.showReport?`<div class="rep"><b class="small">Skipped rows</b>${IMPORT_SKIPPED.map(x=>`<p>Row ${x.nr}: ${esc(x.reason)}</p>`).join("")}
       <b class="small" style="display:block;margin-top:12px">Corrected or flagged ⚠️</b>${FLAGGED.map(v=>`<p><button class="linkbtn" style="padding:0" data-open="${v.id}">${esc(v.full)}</button> (row ${v.nr}): ${esc(v.flag)}</p>`).join("")}</div>`:""}
     <div class="sync" id="syncnote">${syncText()}</div></div>
+  <div class="card" style="margin-top:14px"><b>Password</b>
+    <p class="soft small" style="margin:6px 0 0">Set a password to sign in on other devices without waiting for an email.</p>
+    <form id="setpwform" class="authform" style="margin:12px 0 0;max-width:none" novalidate>
+      <input type="email" autocomplete="username" value="${esc(EMAIL)}" hidden>
+      <label for="newpw" class="soft small">New password</label>
+      <input id="newpw" class="search" type="password" autocomplete="new-password" minlength="6" placeholder="At least 6 characters" required>
+      <label for="newpw2" class="soft small">Repeat new password</label>
+      <input id="newpw2" class="search" type="password" autocomplete="new-password" minlength="6" placeholder="Same password again" required>
+      <button class="btn btn-blue" type="submit">Save password</button>
+    </form>
+    ${PWMSG?`<p class="${PWMSG.err?"autherr":"authinfo"}" style="margin:12px 0 0;max-width:none">${esc(PWMSG.text)}</p>`:""}
+  </div>
   <button class="btn btn-ghost" style="margin-top:20px" data-reset>Reset progress</button>
   <p class="soft small" style="text-align:center;margin-top:16px">Signed in as ${esc(EMAIL)} · Version ${APP_LABEL}</p>
   <button class="btn btn-ghost" style="margin-top:8px" data-signout>Sign out</button>`;
@@ -706,6 +763,8 @@ document.addEventListener("click", e => {
   if (d.signout !== undefined) return signOut();
   if (d.checknow !== undefined) { t.disabled = true; return refreshStatus(); }
   if (d.resend !== undefined) return sendCode(AUTH.email);
+  if (d.authmode) { AUTH.mode = d.authmode; AUTH.step = "email"; AUTH.error = ""; AUTH.info = ""; if (!AUTH.pwStep) AUTH.pwStep = "signin"; return render(); }
+  if (d.pwstep) { AUTH.pwStep = d.pwstep; AUTH.error = ""; AUTH.info = ""; return render(); }
   if (d.changeemail !== undefined) { AUTH.step="email"; AUTH.error=""; AUTH.info=""; return render(); }
   if (d.refreshmembers !== undefined) return loadMembers();
   if (d.approve) return memberAction("approve", d.approve, t);
@@ -732,6 +791,20 @@ document.addEventListener("submit", e => {
     const v = (document.getElementById("email").value||"").trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { AUTH.error = "Please enter a valid email address."; AUTH.email = v; return render(); }
     return sendCode(v);
+  }
+  if (e.target.id === "pwform") {
+    const em = (document.getElementById("pwemail").value||"").trim().toLowerCase();
+    const pw = document.getElementById("pw").value||"";
+    AUTH.email = em;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { AUTH.error = "Please enter a valid email address."; return render(); }
+    if (pw.length < 6) { AUTH.error = "The password needs at least 6 characters."; return render(); }
+    return passwordAuth(em, pw, AUTH.pwStep === "signup");
+  }
+  if (e.target.id === "setpwform") {
+    const a = document.getElementById("newpw").value||"", b = document.getElementById("newpw2").value||"";
+    if (a.length < 6) { PWMSG = {err:true, text:"The password needs at least 6 characters."}; return render(); }
+    if (a !== b) { PWMSG = {err:true, text:"The two passwords are not the same."}; return render(); }
+    return setPassword(a);
   }
   if (e.target.id === "codeform") {
     const v = (document.getElementById("code").value||"").replace(/\D/g,"");
