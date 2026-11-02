@@ -194,6 +194,18 @@ table.forms{width:100%;margin-top:18px;border-collapse:separate;border-spacing:0
 .authform .search{margin-top:0}
 .codein{font-size:1.6rem;letter-spacing:.3em;text-align:center;font-weight:700}
 .codein::placeholder{color:var(--line)}
+.vidbtn{margin-top:18px}
+.vidmodal{position:fixed;inset:0;z-index:50;background:rgba(10,20,40,.55);display:flex;align-items:flex-end;justify-content:center}
+.vidmodal[hidden]{display:none}
+.vidsheet{background:var(--card);width:100%;max-width:640px;max-height:100%;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+@media (min-width:700px){.vidmodal{align-items:center}.vidsheet{border-radius:22px}}
+.vidtop{display:flex;align-items:flex-start;gap:12px;justify-content:space-between}
+.vidforms{flex-wrap:wrap;margin-top:12px}
+.vidctl{margin:12px 0}
+.vidctl .btn{min-height:46px;font-size:.95rem;padding:0 10px}
+.ygbox{min-height:220px;border-radius:14px;overflow:hidden;background:#fff}
+.vidcredit{font-size:.72rem;color:var(--soft);margin:10px 2px 0;line-height:1.45}
+.vidcredit a{color:var(--blue)}
 .seg{display:flex;gap:4px;background:var(--line);border-radius:14px;padding:4px;max-width:380px;margin:20px auto 0}
 .seg button{flex:1;border:0;border-radius:11px;background:transparent;min-height:44px;font-weight:700;color:var(--soft)}
 .seg button.on{background:var(--card);color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.12)}
@@ -207,6 +219,13 @@ table.forms{width:100%;margin-top:18px;border-collapse:separate;border-spacing:0
 <div id="newver"></div>
 <div id="app"></div>
 <div id="tabs"></div>
+<div id="vidmodal" class="vidmodal" hidden role="dialog" aria-modal="true" aria-label="Real videos">
+  <div class="vidsheet">
+    <div id="vidhead"></div>
+    <div id="ygwidget" class="ygbox"></div>
+    <p class="vidcredit">Powered by <a href="https://youglish.com" target="_blank" rel="noopener">YouGlish.com</a> · Videos from YouTube (<a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">Terms</a> · <a href="https://www.google.com/policies/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>). Clips are chosen automatically and are not checked by this app.</p>
+  </div>
+</div>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script>
@@ -296,9 +315,10 @@ function stats(){
 }
 
 /* ---------- Sign-in (email + code), approval, private storage and versions ---------- */
-const APP_VERSION = 8;
-const APP_LABEL = "2.2";
+const APP_VERSION = 9;
+const APP_LABEL = "2.3";
 const CHANGELOG = [
+  {v:9, notes:["🎬 New: watch each verb in real videos — Swedish speakers on YouTube, with subtitles. Find the button on the answer page."]},
   {v:8, notes:["Sign in with email and password only — no emails are sent."]},
   {v:7, notes:["New: sign in with email + password — no email needed.","Signed in with a link? Set a password on the Progress page to use it on other devices."]},
   {v:6, notes:["Sign in with your email and a one-time code.","Your progress is saved privately to your account and follows you between devices.","You’ll see a notice when a new version is ready."]},
@@ -519,6 +539,7 @@ function explanationHtml(v){
     <div class="row"><div class="sv" lang="sv">🇸🇪 ${esc(e.sv)}</div>${spk(e.sv)}</div>
     <div class="exen">🇬🇧 ${esc(e.en)}</div>
     <div class="fa" dir="rtl" lang="fa">🇮🇷 ${esc(e.fa)}</div></div>`).join("")}
+  <button class="btn btn-ghost vidbtn" data-video="${v.id}">🎬 Watch it in real videos</button>
   ${v.flag?`<div class="flag">⚠️ Checked against the PDF: ${esc(v.flag)}</div>`:""}`;
 }
 
@@ -530,6 +551,78 @@ const MODE_NAMES = {learn:"Learn all verbs",mistakes:"Practice my mistakes",rand
 function tabsFor(){ return IS_OWNER ? TABS.concat([["members","👥","Learners"]]) : TABS; }
 function readHash(){ const h = location.hash.replace("#",""); if (tabsFor().some(t=>t[0]===h)) UI.tab = h; }
 function go(tab){ if (tab==="members" && IS_OWNER) loadMembers(); UI.tab = tab; UI.detail = null; if (location.hash !== "#"+tab) history.replaceState(null,"","#"+tab); render(); window.scrollTo(0,0); }
+
+
+/* ---------- Real videos (YouGlish: Swedish speakers on YouTube) ---------- */
+let YGW = null, YG_READY = null, VID = null;
+function loadYouglish(){
+  if (YG_READY) return YG_READY;
+  YG_READY = new Promise((resolve, reject) => {
+    window.onYouglishAPIReady = () => resolve();
+    const tag = document.createElement("script");
+    tag.src = "https://youglish.com/public/emb/widget.js";
+    tag.async = true;
+    tag.onerror = () => { YG_READY = null; reject(new Error("load")); };
+    document.head.appendChild(tag);
+    setTimeout(() => reject(new Error("timeout")), 15000);
+  });
+  return YG_READY;
+}
+function videoQueries(v){
+  const out = [];
+  for (const f of [v.pres, v.pret, v.inf, v.sup]) for (const part of String(f||"").split("/")) {
+    const q = part.trim().toLowerCase();
+    if (q && !out.includes(q)) out.push(q);
+  }
+  return out;
+}
+function renderVideoChrome(){
+  const el = document.getElementById("vidhead"); if (!el || !VID) return;
+  const v = BY_ID[VID.id];
+  el.innerHTML = `<div class="vidtop"><div style="min-width:0"><b>🎬 ${esc(v.full)} in real videos</b>
+      <div class="soft small">${VID.status==="loading"?"Finding Swedish speakers…":VID.status==="none"?"No videos found for this verb yet.":VID.status==="error"?"Videos couldn’t load. Check your internet connection and try again.":`Clip ${VID.track||1} of ${VID.total} for “${esc(VID.q)}”`}</div></div>
+      <button class="x" data-closevideo aria-label="Close videos">✕</button></div>
+    <div class="chips vidforms">${VID.queries.map(q=>`<button class="chip pill${q===VID.q?" on":""}" data-vq="${esc(q)}" lang="sv">${esc(q)}</button>`).join("")}</div>
+    ${VID.status==="ok"?`<div class="chips vidctl"><button class="btn btn-ghost" data-vctl="replay">↺ Replay</button><button class="btn btn-ghost" data-vctl="slow">${VID.slow?"🐢 Slow: on":"🐢 Slower"}</button><button class="btn btn-blue" data-vctl="next">Next →</button></div>`:""}`;
+}
+async function openVideo(id){
+  const v = BY_ID[id]; if (!v) return;
+  try { if ("speechSynthesis" in window) speechSynthesis.cancel(); } catch(e) {}
+  VID = { id, queries: videoQueries(v), qi: 0, q: "", status: "loading", total: 0, track: 0, slow: false };
+  const m = document.getElementById("vidmodal"); m.hidden = false; document.body.style.overflow = "hidden";
+  renderVideoChrome();
+  try { await loadYouglish(); } catch(e) { VID.status = "error"; YG_READY = null; return renderVideoChrome(); }
+  if (!YGW) {
+    YGW = new YG.Widget("ygwidget", {
+      components: 8 + 16 + 64, autoStart: 1, restrictionMode: 1, captionSize: 22,
+      backgroundColor: "#FFFFFF", captionColor: "#1F5FAF", markerColor: "#F5C400", linkColor: "#1F5FAF",
+      events: {
+        onFetchDone: e => {
+          if (!VID) return;
+          if (e.totalResult > 0) { VID.status = "ok"; VID.total = e.totalResult; VID.track = 1; renderVideoChrome(); }
+          else if (VID.auto && VID.qi + 1 < VID.queries.length) { VID.qi++; fetchVideo(VID.queries[VID.qi], true); }
+          else { VID.status = "none"; renderVideoChrome(); }
+        },
+        onVideoChange: e => { if (VID) { VID.track = (e.trackNumber||0) + 1; renderVideoChrome(); } },
+        onError: () => { if (VID) { VID.status = "error"; renderVideoChrome(); } }
+      }
+    });
+  }
+  fetchVideo(VID.queries[0], true);
+}
+function fetchVideo(q, auto){
+  if (!VID || !YGW) return;
+  VID.q = q; VID.auto = auto; VID.qi = VID.queries.indexOf(q); VID.status = "loading"; VID.total = 0;
+  renderVideoChrome();
+  YGW.fetch(q, "swedish");
+  if (VID.slow) setTimeout(() => { try { YGW.setSpeed(0.75); } catch(e) {} }, 1500);
+}
+function closeVideo(){
+  const m = document.getElementById("vidmodal"); if (!m || m.hidden) return false;
+  try { YGW && YGW.pause(); } catch(e) {}
+  m.hidden = true; document.body.style.overflow = ""; VID = null;
+  return true;
+}
 
 /* ---------- Views ---------- */
 function tabLabel(k,l,s){
@@ -754,6 +847,10 @@ document.addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   const d = t.dataset;
   if (d.speak !== undefined) return speak(d.speak, t);
+  if (d.video) return openVideo(d.video);
+  if (d.closevideo !== undefined) return closeVideo();
+  if (d.vq) return fetchVideo(d.vq, false);
+  if (d.vctl && YGW) { if (d.vctl==="next") YGW.next(); else if (d.vctl==="replay") YGW.replay(); else { VID.slow = !VID.slow; try { YGW.setSpeed(VID.slow ? 0.75 : 1); } catch(e) {} renderVideoChrome(); } return; }
   if (d.signout !== undefined) return signOut();
   if (d.checknow !== undefined) { t.disabled = true; return refreshStatus(); }
   if (d.resend !== undefined) return sendCode(AUTH.email);
@@ -810,6 +907,7 @@ document.addEventListener("input", e => {
   if (e.target.id === "q") { UI.query = e.target.value; document.getElementById("list").innerHTML = listItems(UI.tab==="mistakes"); }
 });
 document.addEventListener("keydown", e => {
+  if (VID) { if (e.key === "Escape") closeVideo(); return; }
   if (!UI.study || e.target.tagName === "INPUT") return;
   if (UI.study.answer===null && UI.study.i < UI.study.queue.length) {
     if (e.key==="ArrowRight") answer(true); else if (e.key==="ArrowLeft") answer(false);
