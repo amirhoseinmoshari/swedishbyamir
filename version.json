@@ -1,5 +1,5 @@
 {
-  "version": 7,
-  "label": "2.1",
-  "notes": ["New: sign in with email + password — no email needed."]
+  "version": 8,
+  "label": "2.2",
+  "notes": ["Sign in with email and password only — no emails are sent."]
 }
