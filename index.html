@@ -605,7 +605,7 @@ async function openVideo(id){
           else { VID.status = "none"; renderVideoChrome(); }
         },
         // Short clips: rewind ~4 s before the sentence with the verb, stop ~4 s after it.
-        onVideoChange: e => { if (VID) { VID.track = (e.trackNumber||0) + 1; resetClip(); renderVideoChrome(); } },
+        onVideoChange: e => { if (VID) { VID.track = e.trackNumber || 1; resetClip(); renderVideoChrome(); } },
         onPlayerStateChange: e => { if (VID && VID.clip && e.state === 1 && !VID.clip.rewound) { VID.clip.rewound = true; try { YGW.move(-4); } catch(_) {} } },
         onCaptionChange: e => { if (VID && VID.clip && /\[\[\[|%5B%5B%5B/i.test(String(e.caption||""))) VID.clip.target = String(e.id); },
         onCaptionConsumed: e => {
