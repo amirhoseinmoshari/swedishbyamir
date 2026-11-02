@@ -296,7 +296,7 @@ function stats(){
 const APP_VERSION = 6;
 const APP_LABEL = "2.0";
 const CHANGELOG = [
-  {v:6, notes:["Sign in with your email and a one-time code.","The owner approves each new learner.","Your progress is saved privately to your account and follows you between devices.","You’ll see a notice when a new version is ready."]},
+  {v:6, notes:["Sign in with your email and a one-time code.","Your progress is saved privately to your account and follows you between devices.","You’ll see a notice when a new version is ready."]},
   {v:4, notes:["Advanced English words added next to Elementary and Intermediate."]},
   {v:3, notes:["Similar English words are shown on the answer page."]},
 ];
@@ -362,8 +362,7 @@ async function initAccess(){
 }
 async function afterSignIn(session){
   UID = session.user.id; EMAIL = session.user.email || "";
-  await SB.rpc("ensure_profile");
-  await refreshStatus();
+  await loadUserProgress(); ACCESS = "approved"; readHash(); render();
 }
 async function refreshStatus(){
   const [{ data: prof, error }, { data: admin }] = await Promise.all([
@@ -520,7 +519,7 @@ function gateView(){
   const signOutBtn = `<button class="btn btn-ghost" style="margin-top:12px" data-signout>Sign out</button>`;
   if (ACCESS==="checking") return box("⏳","Checking your account…","One moment.");
   if (ACCESS==="config") return box("🛠️","Setup needed","Add your Supabase project URL and key to <b>config.js</b>. The README explains every step.");
-  if (ACCESS==="error") return box("⚠️","Something went wrong", esc(AUTH.error||"Please try again.")+"<br>If you are the owner, check that you ran <b>schema.sql</b> in Supabase.", signOutBtn);
+  if (ACCESS==="error") return box("⚠️","Something went wrong", esc(AUTH.error||"Please try again.")+"<br>If you are the owner, check that you ran <b>supabase-schema.sql</b> in Supabase.", signOutBtn);
   if (ACCESS==="pending") return box("📨","Waiting for approval",`You’re signed in as <b>${esc(EMAIL)}</b>. The owner needs to approve you. This page checks by itself — you can also close it and come back later.`, `<button class="btn btn-blue" style="margin-top:24px" data-checknow>Check now</button>${signOutBtn}`);
   if (ACCESS==="declined") return box("🚫","No access yet",`You’re signed in as <b>${esc(EMAIL)}</b>, but the owner hasn’t given this account access. Contact them if you think this is a mistake.`, `<button class="btn btn-blue" style="margin-top:24px" data-checknow>Check again</button>${signOutBtn}`);
   const msg = (AUTH.error?`<p class="autherr" role="alert">${esc(AUTH.error)}</p>`:"") + (AUTH.info?`<p class="authinfo">${esc(AUTH.info)}</p>`:"");
@@ -536,7 +535,7 @@ function gateView(){
       <div class="chips" style="margin-top:12px"><button class="btn btn-ghost" data-resend${wait||AUTH.busy?" disabled":""}>${wait?"Resend in "+wait+"s":"Send a new code"}</button><button class="btn btn-ghost" data-changeemail>Change email</button></div></div>`;
   }
   return `<div class="gate"><div class="e">🇸🇪</div><h1>Swedish Verb Trainer</h1>
-    <p class="soft">${VERBS.length} Swedish verbs with English and Persian meanings, examples and audio. Sign in with your email — we’ll send you a code. New learners are approved by the owner.</p>${msg}
+    <p class="soft">${VERBS.length} Swedish verbs with English and Persian meanings, examples and audio. Sign in with your email — we’ll send you a code. Your progress is saved to your own account.</p>${msg}
     <form id="emailform" class="authform" novalidate>
       <label for="email" class="soft small">Your email</label>
       <input id="email" class="search" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(AUTH.email)}" required>
