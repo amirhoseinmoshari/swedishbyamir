@@ -1,5 +1,5 @@
 {
-  "version": 10,
-  "label": "2.4",
-  "notes": ["🎬 Video clips are now short: about 4 seconds before and after the verb."]
+  "version": 11,
+  "label": "2.4.1",
+  "notes": ["🎬 Video clips now stop about 4 seconds after the verb."]
 }
