@@ -296,9 +296,10 @@ function stats(){
 }
 
 /* ---------- Sign-in (email + code), approval, private storage and versions ---------- */
-const APP_VERSION = 7;
-const APP_LABEL = "2.1";
+const APP_VERSION = 8;
+const APP_LABEL = "2.2";
 const CHANGELOG = [
+  {v:8, notes:["Sign in with email and password only — no emails are sent."]},
   {v:7, notes:["New: sign in with email + password — no email needed.","Signed in with a link? Set a password on the Progress page to use it on other devices."]},
   {v:6, notes:["Sign in with your email and a one-time code.","Your progress is saved privately to your account and follows you between devices.","You’ll see a notice when a new version is ready."]},
   {v:4, notes:["Advanced English words added next to Elementary and Intermediate."]},
@@ -306,7 +307,7 @@ const CHANGELOG = [
 ];
 const CFG = window.APP_CONFIG || {};
 let SB=null, UID=null, EMAIL="", IS_OWNER=false, ACCESS="checking", CAN_SAVE=true;
-let AUTH = {step:"email", email:"", error:"", info:"", busy:false, resendAt:0};
+let AUTH = {step:"email", email:"", error:"", info:"", busy:false, resendAt:0, mode:"password", pwStep:"signin"};
 let syncStatus="local", syncTimer=null, writing=false, dirty=false, pollTimer=null;
 let MEMBERS = {list:[], loaded:false, error:""}, LATEST = null;
 
@@ -401,7 +402,7 @@ async function verifyCode(code){
   const { data, error } = await SB.auth.verifyOtp({ email: AUTH.email, token: code, type: "email" });
   AUTH.busy = false;
   if (error || !data.session) { AUTH.error = error ? error.message : "That code didn’t work. Try again."; return render(); }
-  AUTH = {step:"email", email:"", error:"", info:"", busy:false, resendAt:0};
+  AUTH = {step:"email", email:"", error:"", info:"", busy:false, resendAt:0, mode:"password", pwStep:"signin"};
   ACCESS = "checking"; render();
   afterSignIn(data.session);
 }
@@ -412,7 +413,7 @@ async function passwordAuth(email, password, isSignup){
   const { data, error } = res;
   if (error) {
     const m = (error.message||"").toLowerCase();
-    AUTH.error = m.includes("invalid login") ? "Wrong email or password. If you signed up with an email link, use Email link and then set a password on the Progress page."
+    AUTH.error = m.includes("invalid login") ? "Wrong email or password. New here? Tap Create an account."
       : m.includes("already registered") ? "This email already has an account. Sign in instead."
       : m.includes("rate limit") ? "Too many attempts right now. Please wait a few minutes and try again."
       : error.message;
@@ -421,7 +422,7 @@ async function passwordAuth(email, password, isSignup){
   if (data && data.session) { AUTH = {step:"email", email:"", error:"", info:"", busy:false, resendAt:0, mode:"password", pwStep:"signin"}; ACCESS="checking"; render(); return afterSignIn(data.session); }
   // Sign-up without a session: either email confirmation is on, or the email already exists.
   AUTH.pwStep = "signin";
-  AUTH.info = "If this email is new, your account is ready — sign in below. If it already had an account, sign in with its password, or use Email link.";
+  AUTH.info = "This email already has an account. Sign in with its password.";
   render();
 }
 let PWMSG = null;
@@ -567,11 +568,11 @@ function gateView(){
       </form>
       <div class="chips" style="margin-top:12px"><button class="btn btn-ghost" data-resend${wait||AUTH.busy?" disabled":""}>${wait?"Send again in "+wait+"s":"Send the email again"}</button><button class="btn btn-ghost" data-changeemail>Change email</button></div></div>`;
   }
-  const seg = `<div class="seg" role="tablist"><button role="tab" aria-selected="${AUTH.mode!=="password"}" class="${AUTH.mode!=="password"?"on":""}" data-authmode="link">Email link</button><button role="tab" aria-selected="${AUTH.mode==="password"}" class="${AUTH.mode==="password"?"on":""}" data-authmode="password">Password</button></div>`;
-  if (AUTH.mode === "password") {
+  const seg = "";
+  {
     const signup = AUTH.pwStep === "signup";
-    return `<div class="gate"><div class="e">🇸🇪</div><h1>${signup?"Create your account":"Sign in"}</h1>
-    <p class="soft">${signup?"Choose a password (at least 6 characters). No email is needed.":"Sign in with your email and password."}</p>${seg}${msg}
+    return `<div class="gate"><div class="e">🇸🇪</div><h1>${signup?"Create your account":"Swedish Verb Trainer"}</h1>
+    <p class="soft">${signup?"Choose a password (at least 6 characters). No email is needed.":VERBS.length+" Swedish verbs with English and Persian meanings, examples and audio. Sign in with your email and password."}</p>${seg}${msg}
     <form id="pwform" class="authform" novalidate>
       <label for="pwemail" class="soft small">Your email</label>
       <input id="pwemail" class="search" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(AUTH.email)}" required>
@@ -580,15 +581,8 @@ function gateView(){
       <button class="btn btn-blue" type="submit"${AUTH.busy?" disabled":""}>${AUTH.busy?"One moment…":(signup?"Create account":"Sign in")}</button>
     </form>
     <p class="soft small" style="margin-top:14px">${signup?`Already have an account? <button class="linkbtn" data-pwstep="signin">Sign in</button>`:`New here? <button class="linkbtn" data-pwstep="signup">Create an account</button>`}</p>
-    ${signup?"":`<p class="soft small" style="max-width:380px;margin:4px auto 0">Forgot your password, or signed up with an email link before? Use <b>Email link</b> to sign in, then set a password on the Progress page.</p>`}</div>`;
+    ${signup?"":`<p class="soft small" style="max-width:380px;margin:4px auto 0">Tip: let your browser save your password. Forgotten passwords can’t be reset by email.</p>`}</div>`;
   }
-  return `<div class="gate"><div class="e">🇸🇪</div><h1>Swedish Verb Trainer</h1>
-    <p class="soft">${VERBS.length} Swedish verbs with English and Persian meanings, examples and audio. Sign in with an email link, or with email and password. Your progress is saved to your own account.</p>${seg}${msg}
-    <form id="emailform" class="authform" novalidate>
-      <label for="email" class="soft small">Your email</label>
-      <input id="email" class="search" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(AUTH.email)}" required>
-      <button class="btn btn-blue" type="submit"${AUTH.busy?" disabled":""}>${AUTH.busy?"Sending…":"Send sign-in email"}</button>
-    </form></div>`;
 }
 function memberRow(m, actions){
   const when = m.status==="approved" && m.approved_at ? "Approved "+new Date(m.approved_at).toLocaleDateString() : "Asked "+new Date(m.requested_at).toLocaleDateString();
@@ -686,7 +680,7 @@ function progressView(){
       <b class="small" style="display:block;margin-top:12px">Corrected or flagged ⚠️</b>${FLAGGED.map(v=>`<p><button class="linkbtn" style="padding:0" data-open="${v.id}">${esc(v.full)}</button> (row ${v.nr}): ${esc(v.flag)}</p>`).join("")}</div>`:""}
     <div class="sync" id="syncnote">${syncText()}</div></div>
   <div class="card" style="margin-top:14px"><b>Password</b>
-    <p class="soft small" style="margin:6px 0 0">Set a password to sign in on other devices without waiting for an email.</p>
+    <p class="soft small" style="margin:6px 0 0">Change the password you use to sign in.</p>
     <form id="setpwform" class="authform" style="margin:12px 0 0;max-width:none" novalidate>
       <input type="email" autocomplete="username" value="${esc(EMAIL)}" hidden>
       <label for="newpw" class="soft small">New password</label>
