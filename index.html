@@ -315,8 +315,8 @@ function stats(){
 }
 
 /* ---------- Sign-in (email + code), approval, private storage and versions ---------- */
-const APP_VERSION = 10;
-const APP_LABEL = "2.4";
+const APP_VERSION = 11;
+const APP_LABEL = "2.4.1";
 const CHANGELOG = [
   {v:10, notes:["🎬 Video clips are now short: about 4 seconds before and after the verb."]},
   {v:9, notes:["🎬 New: watch each verb in real videos — Swedish speakers on YouTube, with subtitles. Find the button on the answer page."]},
@@ -607,9 +607,9 @@ async function openVideo(id){
         // Short clips: rewind ~4 s before the sentence with the verb, stop ~4 s after it.
         onVideoChange: e => { if (VID) { VID.track = (e.trackNumber||0) + 1; resetClip(); renderVideoChrome(); } },
         onPlayerStateChange: e => { if (VID && VID.clip && e.state === 1 && !VID.clip.rewound) { VID.clip.rewound = true; try { YGW.move(-4); } catch(_) {} } },
-        onCaptionChange: e => { if (VID && VID.clip && String(e.caption||"").includes("[[[")) VID.clip.target = e.id; },
+        onCaptionChange: e => { if (VID && VID.clip && /\[\[\[|%5B%5B%5B/i.test(String(e.caption||""))) VID.clip.target = String(e.id); },
         onCaptionConsumed: e => {
-          if (!VID || !VID.clip || !VID.clip.rewound || VID.clip.armed || VID.clip.target == null || e.id !== VID.clip.target) return;
+          if (!VID || !VID.clip || !VID.clip.rewound || VID.clip.armed || VID.clip.target == null || String(e.id) !== VID.clip.target) return;
           VID.clip.armed = true; clearTimeout(VID.stopT);
           VID.stopT = setTimeout(() => { try { YGW.pause(); } catch(_) {} if (VID) { VID.paused = true; renderVideoChrome(); } }, VID.slow ? 5300 : 4000);
         },
