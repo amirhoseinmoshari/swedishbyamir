@@ -1,5 +1,5 @@
 {
-  "version": 6,
-  "label": "2.0",
-  "notes": ["Sign in with your email and a one-time code. Your progress is saved to your own account."]
+  "version": 7,
+  "label": "2.1",
+  "notes": ["New: sign in with email + password — no email needed."]
 }
