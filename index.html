@@ -353,7 +353,9 @@ async function loadUserProgress(){
 async function initAccess(){
   checkVersion();
   if (!CFG.SUPABASE_URL || !CFG.SUPABASE_KEY || !window.supabase) { ACCESS="config"; return render(); }
-  SB = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+  SB = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  // Signing in by tapping the link in the email (also when it happens in another tab)
+  SB.auth.onAuthStateChange((event, session) => { if (event === "SIGNED_IN" && session && !UID) setTimeout(() => afterSignIn(session), 0); });
   try {
     const { data } = await SB.auth.getSession();
     if (data && data.session) return afterSignIn(data.session);
@@ -361,6 +363,7 @@ async function initAccess(){
   ACCESS = "signin"; render();
 }
 async function afterSignIn(session){
+  if (UID) return;
   UID = session.user.id; EMAIL = session.user.email || "";
   await loadUserProgress(); ACCESS = "approved"; readHash(); render();
 }
@@ -382,10 +385,10 @@ async function refreshStatus(){
 }
 async function sendCode(email){
   AUTH.busy = true; AUTH.error = ""; AUTH.info = ""; render();
-  const { error } = await SB.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  const { error } = await SB.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
   AUTH.busy = false;
   if (error) { AUTH.error = error.message; }
-  else { AUTH.email = email; AUTH.step = "code"; AUTH.resendAt = Date.now()+60000; AUTH.info = "We sent a code to " + email + ". It can take a minute — check your spam folder too."; }
+  else { AUTH.email = email; AUTH.step = "code"; AUTH.resendAt = Date.now()+60000; AUTH.info = "We sent an email to " + email + ". Open it and tap the sign-in link — or type the code below if the email shows one. It can take a minute; check your spam folder too."; }
   render();
   const c = document.getElementById("code"); if (c) c.focus();
 }
@@ -526,20 +529,20 @@ function gateView(){
   if (AUTH.step==="code") {
     const wait = Math.max(0, Math.ceil((AUTH.resendAt-Date.now())/1000));
     if (wait) setTimeout(()=>{ if (ACCESS==="signin" && AUTH.step==="code") render(); }, wait*1000+50);
-    return `<div class="gate"><div class="e">✉️</div><h1>Enter your code</h1>${msg}
+    return `<div class="gate"><div class="e">✉️</div><h1>Check your email</h1>${msg}
       <form id="codeform" class="authform" novalidate>
-        <label for="code" class="soft small">Code from the email</label>
+        <label for="code" class="soft small">Code (only if your email shows one)</label>
         <input id="code" class="search codein" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="••••••" required>
         <button class="btn btn-blue" type="submit"${AUTH.busy?" disabled":""}>${AUTH.busy?"Checking…":"Sign in"}</button>
       </form>
-      <div class="chips" style="margin-top:12px"><button class="btn btn-ghost" data-resend${wait||AUTH.busy?" disabled":""}>${wait?"Resend in "+wait+"s":"Send a new code"}</button><button class="btn btn-ghost" data-changeemail>Change email</button></div></div>`;
+      <div class="chips" style="margin-top:12px"><button class="btn btn-ghost" data-resend${wait||AUTH.busy?" disabled":""}>${wait?"Send again in "+wait+"s":"Send the email again"}</button><button class="btn btn-ghost" data-changeemail>Change email</button></div></div>`;
   }
   return `<div class="gate"><div class="e">🇸🇪</div><h1>Swedish Verb Trainer</h1>
-    <p class="soft">${VERBS.length} Swedish verbs with English and Persian meanings, examples and audio. Sign in with your email — we’ll send you a code. Your progress is saved to your own account.</p>${msg}
+    <p class="soft">${VERBS.length} Swedish verbs with English and Persian meanings, examples and audio. Sign in with your email — we’ll email you a sign-in link. Your progress is saved to your own account.</p>${msg}
     <form id="emailform" class="authform" novalidate>
       <label for="email" class="soft small">Your email</label>
       <input id="email" class="search" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="${esc(AUTH.email)}" required>
-      <button class="btn btn-blue" type="submit"${AUTH.busy?" disabled":""}>${AUTH.busy?"Sending…":"Send code"}</button>
+      <button class="btn btn-blue" type="submit"${AUTH.busy?" disabled":""}>${AUTH.busy?"Sending…":"Send sign-in email"}</button>
     </form></div>`;
 }
 function memberRow(m, actions){
